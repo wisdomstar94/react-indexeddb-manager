@@ -320,7 +320,6 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
         checkComplete(db);
       };
       request.onsuccess = (event) => {
-        console.log('--2', schema);
         checkComplete(db);
       };
       request.onupgradeneeded = (event) => {
@@ -363,12 +362,12 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
     }
 
     function checkComplete(db: IDBDatabase | undefined) {
+      db?.close();
       callCheckCompleteCount++;
       if (callCheckCompleteCount !== defineSchemas.length) return;
       
       isSchemasChecking.current = false;
       onDefineSchemasResult(result);
-      db?.close();
       setIsReady(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
