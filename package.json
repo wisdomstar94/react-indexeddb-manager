@@ -1,6 +1,6 @@
 {
   "name": "@wisdomstar94/react-indexeddb-manager",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": false,
   "scripts": {
     "dev": "next dev -p 3330",

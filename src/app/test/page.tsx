@@ -46,7 +46,7 @@ export default function Page() {
         console.log('@result', result);
       },
       onError(event) {
-          
+        console.log('@delete.onError.event', event);
       },
     })
   }, [indexeddbManager]);
@@ -62,7 +62,7 @@ export default function Page() {
         console.log('g', result[0].data?.updatedAt);
       },
       onError(event) {
-        
+        console.log('@get.onError.event', event);
       },
     })
   }, [indexeddbManager]);
@@ -77,7 +77,7 @@ export default function Page() {
         console.log('g', result[0].data?.updatedAt);
       },
       onError(event) {
-        
+        console.log('@getAll.onError.event', event);
       },
     })
   }, [indexeddbManager]);

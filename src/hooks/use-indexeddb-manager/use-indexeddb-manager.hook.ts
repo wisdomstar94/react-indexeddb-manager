@@ -27,24 +27,55 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       onError,
     } = options;
 
-    let db: IDBDatabase;
-    const result: IUseIndexeddbManager.InsertResult<T>[] = datas.map((item) => ({ key: item.key, isInsertSuccess: undefined, data: item }));
-    const request = window.indexedDB.open(dbName, version);
-    request.onsuccess = (event) => {
-      db = (event.target as any).result;
-      for (const data of datas) {
-        const store = db.transaction([storeName], 'readonly').objectStore(storeName);
-        const nowTimestamp = new Date().getTime();
-        const storeTransaction = store.get(data.key);
-        storeTransaction.onsuccess = (_event) => {
-          const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
-          const originalData = storeTransaction.result;
-          if (originalData !== undefined) {
-            // 존재함!
-            if (isOverwrite) {
-              (data as any).createdAt = originalData.createdAt;
+    isExistStore(dbName, version, storeName, (isExist) => {
+      if (!isExist) {
+        onError();
+      } else {
+        call();
+      }
+    });
+
+    const call = () => {
+      let db: IDBDatabase;
+      const result: IUseIndexeddbManager.InsertResult<T>[] = datas.map((item) => ({ key: item.key, isInsertSuccess: undefined, data: item }));
+      const request = window.indexedDB.open(dbName, version);
+      request.onsuccess = (event) => {
+        db = (event.target as any).result;
+        for (const data of datas) {
+          const store = db.transaction([storeName], 'readonly').objectStore(storeName);
+          const nowTimestamp = new Date().getTime();
+          const storeTransaction = store.get(data.key);
+          storeTransaction.onsuccess = (_event) => {
+            const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
+            const originalData = storeTransaction.result;
+            if (originalData !== undefined) {
+              // 존재함!
+              if (isOverwrite) {
+                (data as any).createdAt = originalData.createdAt;
+                (data as any).updatedAt = nowTimestamp;
+                const storeRequest = store.put(data);
+                storeRequest.onsuccess = () => {
+                  result.forEach(item => {
+                    if (item.key === data.key) {
+                      item.isInsertSuccess = true;
+                    }
+                  });
+                  checkComplete();
+                };
+                storeRequest.onerror = () => {
+                  result.forEach(item => {
+                    if (item.key === data.key) {
+                      item.isInsertSuccess = false;
+                    }
+                  });
+                  checkComplete();
+                };
+              }
+            } else {
+              // 존재하지 않음!
+              (data as any).createdAt = nowTimestamp;
               (data as any).updatedAt = nowTimestamp;
-              const storeRequest = store.put(data);
+              const storeRequest = store.add(data);
               storeRequest.onsuccess = () => {
                 result.forEach(item => {
                   if (item.key === data.key) {
@@ -62,43 +93,22 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
                 checkComplete();
               };
             }
-          } else {
-            // 존재하지 않음!
-            (data as any).createdAt = nowTimestamp;
-            (data as any).updatedAt = nowTimestamp;
-            const storeRequest = store.add(data);
-            storeRequest.onsuccess = () => {
-              result.forEach(item => {
-                if (item.key === data.key) {
-                  item.isInsertSuccess = true;
-                }
-              });
-              checkComplete();
-            };
-            storeRequest.onerror = () => {
-              result.forEach(item => {
-                if (item.key === data.key) {
-                  item.isInsertSuccess = false;
-                }
-              });
-              checkComplete();
-            };
-          }
-        };
+          };
+        }
+      };
+      request.onerror = (event) => {
+        onError(event);
+        db?.close();
+      };
+
+      function checkComplete() {
+        const target = result.find(x => x.isInsertSuccess === undefined);
+        if (target !== undefined) return;
+        // complete!
+        onSuccess(result);
+        db.close();
       }
     };
-    request.onerror = (event) => {
-      onError(event);
-      db?.close();
-    };
-
-    function checkComplete() {
-      const target = result.find(x => x.isInsertSuccess === undefined);
-      if (target !== undefined) return;
-      // complete!
-      onSuccess(result);
-      db.close();
-    }
   }
 
   function deletesToStore(options: IUseIndexeddbManager.DeletesOptions<DBNAME, STORENAME>) {
@@ -116,43 +126,53 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       onError,
     } = options;
 
-    let db: IDBDatabase;
-    const request = window.indexedDB.open(dbName, version);
-    const result: IUseIndexeddbManager.DeleteResult[] = deleteKeys.map(x => ({ key: x, isDeleteSuccess: undefined }));
-    request.onsuccess = (event) => {
-      db = (event.target as any).result;
-      for (const deleteKey of deleteKeys) {
-        const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
-        const storeTransaction = store.delete(deleteKey);
-        storeTransaction.onsuccess = () => {
-          result.forEach(item => {
-            if (item.key === deleteKey) {
-              item.isDeleteSuccess = true;
-            }
-          });
-          checkComplete();
-        };
-        storeTransaction.onerror = () => {
-          result.forEach(item => {
-            if (item.key === deleteKey) {
-              item.isDeleteSuccess = false;
-            }
-          });
-          checkComplete();
-        };
+    isExistStore(dbName, version, storeName, (isExist) => {
+      if (!isExist) {
+        onError();
+      } else {
+        call();
+      }
+    });
+
+    const call = () => {
+      let db: IDBDatabase;
+      const request = window.indexedDB.open(dbName, version);
+      const result: IUseIndexeddbManager.DeleteResult[] = deleteKeys.map(x => ({ key: x, isDeleteSuccess: undefined }));
+      request.onsuccess = (event) => {
+        db = (event.target as any).result;
+        for (const deleteKey of deleteKeys) {
+          const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
+          const storeTransaction = store.delete(deleteKey);
+          storeTransaction.onsuccess = () => {
+            result.forEach(item => {
+              if (item.key === deleteKey) {
+                item.isDeleteSuccess = true;
+              }
+            });
+            checkComplete();
+          };
+          storeTransaction.onerror = () => {
+            result.forEach(item => {
+              if (item.key === deleteKey) {
+                item.isDeleteSuccess = false;
+              }
+            });
+            checkComplete();
+          };
+        }
+      };
+      request.onerror = (event) => {
+        onError(event);
+        db?.close();
+      };
+      
+      function checkComplete() {
+        if (result.find(x => x.isDeleteSuccess === undefined) !== undefined) return;
+        // complete!
+        onSuccess(result);
+        db.close();
       }
     };
-    request.onerror = (event) => {
-      onError(event);
-      db?.close();
-    };
-    
-    function checkComplete() {
-      if (result.find(x => x.isDeleteSuccess === undefined) !== undefined) return;
-      // complete!
-      onSuccess(result);
-      db.close();
-    }
   }
 
   function clearStore(options: IUseIndexeddbManager.ClearStoreOptions<DBNAME, STORENAME>) {
@@ -169,24 +189,34 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       onError,
     } = options;
 
-    let db: IDBDatabase;
-    const request = window.indexedDB.open(dbName, version);
-    request.onsuccess = (event) => {
-      db = (event.target as any).result;
-      const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
-      const storeRequest = store.clear();
-      storeRequest.onsuccess = (event) => {
-        onSuccess(event);
-        db?.close();
-      };
-      storeRequest.onerror = (event) => {
+    isExistStore(dbName, version, storeName, (isExist) => {
+      if (!isExist) {
         onError();
+      } else {
+        call();
+      }
+    });
+
+    const call = () => {
+      let db: IDBDatabase;
+      const request = window.indexedDB.open(dbName, version);
+      request.onsuccess = (event) => {
+        db = (event.target as any).result;
+        const store = db.transaction([storeName], 'readwrite').objectStore(storeName);
+        const storeRequest = store.clear();
+        storeRequest.onsuccess = (event) => {
+          onSuccess(event);
+          db?.close();
+        };
+        storeRequest.onerror = (event) => {
+          onError();
+          db?.close();
+        };
+      };
+      request.onerror = (event) => {
+        onError(event);
         db?.close();
       };
-    };
-    request.onerror = (event) => {
-      onError(event);
-      db?.close();
     };
   }
 
@@ -200,45 +230,55 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       onError,
     } = options;
 
-    let db: IDBDatabase;
-    const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = keys.map(x => ({ key: x, data: null, isGetSuccess: null }));
-    const request = window.indexedDB.open(dbName, version);
-    request.onsuccess = (event) => {
-      db = (event.target as any).result;
-      const store = db.transaction([storeName], 'readonly').objectStore(storeName);
-      for (const key of keys) {
-        const storeRequest = store.get(key);
-        storeRequest.onsuccess = () => {
-          result.forEach((thisItem) => {
-            if (thisItem.key === key) {
-              thisItem.isGetSuccess = true;
-              thisItem.data = storeRequest.result;
-            }
-          });
-          checkComplete();
-        };
-        storeRequest.onerror = () => {
-          result.forEach((thisItem) => {
-            if (thisItem.key === key) {
-              thisItem.isGetSuccess = false;
-            }
-          });
-          checkComplete();
-        };
+    isExistStore(dbName, version, storeName, (isExist) => {
+      if (!isExist) {
+        onError();
+      } else {
+        call();
       }
-    };
-    request.onerror = (event) => {
-      onError(event);
-      db?.close();
-    };
+    });
 
-    function checkComplete() {
-      if (result.find(x => x.isGetSuccess === null) !== undefined) {
-        return;
+    const call = () => {
+      let db: IDBDatabase;
+      const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = keys.map(x => ({ key: x, data: null, isGetSuccess: null }));
+      const request = window.indexedDB.open(dbName, version);
+      request.onsuccess = (event) => {
+        db = (event.target as any).result;
+        const store = db.transaction([storeName], 'readonly').objectStore(storeName);
+        for (const key of keys) {
+          const storeRequest = store.get(key);
+          storeRequest.onsuccess = () => {
+            result.forEach((thisItem) => {
+              if (thisItem.key === key) {
+                thisItem.isGetSuccess = true;
+                thisItem.data = storeRequest.result;
+              }
+            });
+            checkComplete();
+          };
+          storeRequest.onerror = () => {
+            result.forEach((thisItem) => {
+              if (thisItem.key === key) {
+                thisItem.isGetSuccess = false;
+              }
+            });
+            checkComplete();
+          };
+        }
+      };
+      request.onerror = (event) => {
+        onError(event);
+        db?.close();
+      };
+
+      function checkComplete() {
+        if (result.find(x => x.isGetSuccess === null) !== undefined) {
+          return;
+        }
+        onResult(result);
+        db?.close();
       }
-      onResult(result);
-      db?.close();
-    }
+    };
   }
 
   function getAllFromStore<T extends { key: string } & Partial<{ createdAt: number; updatedAt: number }>>(options: IUseIndexeddbManager.GetAllOptions<T, DBNAME, STORENAME>) {
@@ -250,42 +290,81 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       onError,
     } = options;
 
-    let db: IDBDatabase;
-    // const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = keys.map(x => ({ key: x, data: null, isGetSuccess: null }));
-    const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = [];
+    isExistStore(dbName, version, storeName, (isExist) => {
+      if (!isExist) {
+        onError();
+      } else {
+        call();
+      }
+    });
+
+    const call = () => {
+      let db: IDBDatabase;
+      // const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = keys.map(x => ({ key: x, data: null, isGetSuccess: null }));
+      const result: IUseIndexeddbManager.GetResult<T & { key: string } & Partial<{ createdAt: number; updatedAt: number }>>[] = [];
+      const request = window.indexedDB.open(dbName, version);
+      request.onsuccess = (event) => {
+        db = (event.target as any).result;
+        const store = db.transaction([storeName], 'readonly').objectStore(storeName);
+        
+        const storeRequest = store.getAll();
+        storeRequest.onsuccess = () => {
+          storeRequest.result.forEach((thisItem) => {
+            result.push({
+              key: thisItem.key,
+              isGetSuccess: true,
+              data: thisItem,
+            });
+          });
+          checkComplete();
+        };
+        storeRequest.onerror = () => {
+          onError(event);
+        };
+      };
+      request.onerror = (event) => {
+        onError(event);
+        db?.close();
+      };
+
+      function checkComplete() {
+        if (result.find(x => x.isGetSuccess === null) !== undefined) {
+          return;
+        }
+        onResult(result);
+        db?.close();
+      }
+    };
+  }
+
+  function isExistStore(dbName: string, version: number, storeName: string, onResult: (isExist: boolean) => void) {
     const request = window.indexedDB.open(dbName, version);
     request.onsuccess = (event) => {
-      db = (event.target as any).result;
-      const store = db.transaction([storeName], 'readonly').objectStore(storeName);
-      
-      const storeRequest = store.getAll();
-      storeRequest.onsuccess = () => {
-        storeRequest.result.forEach((thisItem) => {
-          result.push({
-            key: thisItem.key,
-            isGetSuccess: true,
-            data: thisItem,
-          });
-        });
-        checkComplete();
-      };
-      storeRequest.onerror = () => {
-        onError(event);
-      };
+      const db: IDBDatabase = (event.target as any).result;
+      onResult(db.objectStoreNames.contains(storeName));
+      db.close();
     };
-    request.onerror = (event) => {
-      onError(event);
-      db?.close();
-    };
-
-    function checkComplete() {
-      if (result.find(x => x.isGetSuccess === null) !== undefined) {
-        return;
-      }
-      onResult(result);
-      db?.close();
-    }
   }
+
+  // function createStore(dbName: string, version: number, storeName: string, onResult: (isSuccess: boolean) => void) {
+  //   const targetSchema = defineSchemas.find(x => x.dbName === dbName);
+  //   const targetStore = targetSchema?.defineStores.find(x => x.storeName === storeName);
+  //   if (targetStore === undefined) return;
+
+  //   const request = window.indexedDB.open(dbName, version);
+  //   request.onerror = (event) => {
+  //     onResult(false);
+  //   };
+  //   request.onsuccess = (event) => {
+  //     const db: IDBDatabase = (event.target as any).result;
+  //     const store = db.createObjectStore(targetStore.storeName, { keyPath: targetStore.storekeyPath });
+  //     targetStore.storeIndexItems?.forEach((storeIndexItem) => {
+  //       store?.createIndex(storeIndexItem.indexName, storeIndexItem.keyPath, storeIndexItem.options);
+  //     });
+  //     onResult(true);
+  //     db?.close();
+  //   };
+  // }
 
   useEffect(() => {
     if (isAbleIndexeddb !== true) {
