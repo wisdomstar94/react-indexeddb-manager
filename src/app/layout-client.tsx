@@ -5,7 +5,8 @@ import { useState } from "react";
 
 export default function RootLayoutClient() {
   const [menus, setMenus] = useState([
-    { name: '/test', href: '/test' },
+    { name: '/test/basic-test', href: '/test/basic-test' },
+    { name: '/test/sync-get-and-delete-test', href: '/test/sync-get-and-delete-test' },
   ]);
 
   return (

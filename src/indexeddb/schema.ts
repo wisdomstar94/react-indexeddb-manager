@@ -4,6 +4,20 @@ const getDefineSchemas = <DBNAME, STORENAME>(defineSchemas: IUseIndexeddbManager
 
 export const defineSchemas = getDefineSchemas([
   {
+    dbName: 'test_db' as const,
+    version: 1,
+    defineStores: [
+      {
+        storeName: 'test_store' as const,
+        storekeyPath: 'key',
+        isIfExistDeleteThenCreate: false,
+        storeIndexItems: [
+          { indexName: `key_unique`, keyPath: `key`, options: { unique: true } },
+        ],
+      },
+    ],
+  },
+  {
     dbName: '__aaaa__' as const,
     version: 1,
     defineStores: [
