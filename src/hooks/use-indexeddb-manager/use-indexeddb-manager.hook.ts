@@ -100,6 +100,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
         onError(event);
         db?.close();
       };
+      request.onupgradeneeded = (event) => {
+        console.log('@onupgradeneeded', event);
+        onUpgradeneededCallback(event, dbName);
+      };
 
       function checkComplete() {
         const target = result.find(x => x.isInsertSuccess === undefined);
@@ -165,6 +169,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
         onError(event);
         db?.close();
       };
+      request.onupgradeneeded = (event) => {
+        console.log('@onupgradeneeded', event);
+        onUpgradeneededCallback(event, dbName);
+      };
       
       function checkComplete() {
         if (result.find(x => x.isDeleteSuccess === undefined) !== undefined) return;
@@ -216,6 +224,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       request.onerror = (event) => {
         onError(event);
         db?.close();
+      };
+      request.onupgradeneeded = (event) => {
+        console.log('@onupgradeneeded', event);
+        onUpgradeneededCallback(event, dbName);
       };
     };
   }
@@ -269,6 +281,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       request.onerror = (event) => {
         onError(event);
         db?.close();
+      };
+      request.onupgradeneeded = (event) => {
+        console.log('@onupgradeneeded', event);
+        onUpgradeneededCallback(event, dbName);
       };
 
       function checkComplete() {
@@ -326,6 +342,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
         onError(event);
         db?.close();
       };
+      request.onupgradeneeded = (event) => {
+        console.log('@onupgradeneeded', event);
+        onUpgradeneededCallback(event, dbName);
+      };
 
       function checkComplete() {
         if (result.find(x => x.isGetSuccess === null) !== undefined) {
@@ -343,6 +363,10 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       const db: IDBDatabase = (event.target as any).result;
       onResult(db.objectStoreNames.contains(storeName));
       db.close();
+    };
+    request.onupgradeneeded = (event) => {
+      console.log('@onupgradeneeded', event);
+      onUpgradeneededCallback(event, dbName);
     };
   }
 
@@ -365,6 +389,34 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
   //     db?.close();
   //   };
   // }
+
+  function onUpgradeneededCallback(event: IDBVersionChangeEvent, dbName: string, onResult?: (defineStore: IUseIndexeddbManager.DefineStore<STORENAME>, isDefineSucess: boolean, isExist: boolean) => void, onEnd?: () => void) {
+    console.log('@onupgradeneeded..', event);
+    const schema = defineSchemas.find(x => x.dbName === dbName);
+    if (schema === undefined) {
+      console.error(`일치하는 schema 가 없습니다.`);
+      return;
+    }
+    const db = (event.target as any).result;
+    for (const defineStore of schema.defineStores) {
+      if (!db.objectStoreNames.contains(defineStore.storeName)) {
+        const store = db.createObjectStore(defineStore.storeName, { keyPath: defineStore.storekeyPath });
+        defineStore.storeIndexItems?.forEach((storeIndexItem) => {
+          store?.createIndex(storeIndexItem.indexName, storeIndexItem.keyPath, storeIndexItem.options);
+        });
+        if (typeof onResult === 'function') {
+          onResult(defineStore, true, false);
+        }
+      } else {
+        if (typeof onResult === 'function') {
+          onResult(defineStore, false, true);
+        }
+      }
+    }
+    if (typeof onEnd === 'function') {
+      onEnd();
+    }
+  }
 
   useEffect(() => {
     if (isAbleIndexeddb !== true) {
@@ -403,39 +455,23 @@ export function useIndexeddbManager<DBNAME extends string, STORENAME extends str
       };
       request.onupgradeneeded = (event) => {
         db = (event.target as any).result;
-        for (const defineStore of schema.defineStores) {
-          if (!db.objectStoreNames.contains(defineStore.storeName)) {
-            const store = db.createObjectStore(defineStore.storeName, { keyPath: defineStore.storekeyPath });
-            defineStore.storeIndexItems?.forEach((storeIndexItem) => {
-              store?.createIndex(storeIndexItem.indexName, storeIndexItem.keyPath, storeIndexItem.options);
-            });
-            result.forEach((thisItem) => {
-              if (thisItem.dbName === schema.dbName) {
-                thisItem.storeResult.forEach((thisStoreItem) => {
-                  if (thisStoreItem.storeName === defineStore.storeName) {
-                    thisStoreItem.isDefineSuccess = true;
-                    thisStoreItem.isExist = false;
-                  }
-                }); 
-              }
-            });
-          } else {
-            result.forEach((thisItem) => {
-              if (thisItem.dbName === schema.dbName) {
-                thisItem.storeResult.forEach((thisStoreItem) => {
-                  if (thisStoreItem.storeName === defineStore.storeName) {
-                    thisStoreItem.isDefineSuccess = false;
-                    thisStoreItem.isExist = true;
-                  }
-                }); 
-              }
-            });
-          }
-        }
-        result.forEach((thisItem) => {
-          if (thisItem.dbName === schema.dbName) {
-            thisItem.isDefineSuccess = true;
-          }
+        onUpgradeneededCallback(event, schema.dbName, (defineStore, isDefineSucess, isExist) => {
+          result.forEach((thisItem) => {
+            if (thisItem.dbName === schema.dbName) {
+              thisItem.storeResult.forEach((thisStoreItem) => {
+                if (thisStoreItem.storeName === defineStore.storeName) {
+                  thisStoreItem.isDefineSuccess = isDefineSucess;
+                  thisStoreItem.isExist = isExist;
+                }
+              }); 
+            }
+          });
+        }, () => {
+          result.forEach((thisItem) => {
+            if (thisItem.dbName === schema.dbName) {
+              thisItem.isDefineSuccess = true;
+            }
+          });
         });
       };
     }
