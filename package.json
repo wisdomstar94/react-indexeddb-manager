@@ -1,6 +1,6 @@
 {
   "name": "@wisdomstar94/react-indexeddb-manager",
-  "version": "0.0.6-test.1",
+  "version": "0.0.6",
   "license": "MIT",
   "private": false,
   "scripts": {
