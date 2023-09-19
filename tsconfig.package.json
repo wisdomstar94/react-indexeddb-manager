@@ -3,7 +3,7 @@
     "target": "es6",
     "lib": ["dom", "dom.iterable", "esnext"],
     "declaration": true,
-    "declarationDir": "lib/src",
+    "declarationDir": "lib",
     "emitDeclarationOnly": true,
     "allowJs": true,
     "skipLibCheck": true,
@@ -20,6 +20,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "src/hooks/**/*.ts", "src/hooks/**/*.tsx", "src/components/**/*.ts", "src/components/**/*.tsx"],
+  "include": ["next-env.d.ts", "src/hooks/**/*.ts", "src/hooks/**/*.tsx", "src/components/**/*.ts", "src/components/**/*.tsx", "index.ts"],
   "exclude": ["node_modules"],
 }
